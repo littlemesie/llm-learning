@@ -8,19 +8,19 @@ import torch
 import torch.nn as nn
 
 class AttentionLayer(nn.Module):
-    def __init__(self, embed_dim, hidden_dim, num_heads, dropout=0.0):
-        super(AttentionLayer, self).__init__()
-        assert hidden_dim % num_heads == 0, "hidden_dim 需要能被 num_heads 整除"
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        assert config.hidden_size % config.num_heads == 0, "hidden_size 需要能被 num_heads 整除"
 
-        self.embed_size = embed_dim  # embedding 层
-        self.hidden_dim = hidden_dim  # 隐藏层
-        self.num_heads = num_heads  # 多头数量
-        self.head_dim = hidden_dim // num_heads  # 每个头的维度
+        self.hidden_size = config.hidden_size  # 隐藏层
+        self.num_heads = config.num_heads  # 多头数量
+        self.head_dim = config.hidden_size // config.num_heads  # 每个头的维度
 
-        self.q_linear = nn.Linear(embed_dim, hidden_dim)
-        self.k_linear = nn.Linear(embed_dim, hidden_dim)
-        self.v_linear = nn.Linear(embed_dim, hidden_dim)
-        self.dropout = torch.nn.Dropout(dropout)
+        self.q_linear = nn.Linear(config.hidden_size, config.hidden_size)
+        self.k_linear = nn.Linear(config.hidden_size, config.hidden_size)
+        self.v_linear = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dropout = torch.nn.Dropout(config.dropout)
 
     def scaled_dot_product_attention(self, Q, K, V, mask=None):
         """注意力特征矩阵计算 attention_weights_martix = softmax(QK/dk)V"""
@@ -44,7 +44,7 @@ class AttentionLayer(nn.Module):
     # 合并多头(多个4维张量合并成一个3维张量，相当于还原成输入向量x的size)
     def merge_heads(self, x):
         batch_size, _, seq_length, _ = x.size()
-        x = x.transpose(1, 2).contiguous().view(batch_size, seq_length, self.hidden_dim)
+        x = x.transpose(1, 2).contiguous().view(batch_size, seq_length, self.hidden_size)
         return x
 
     def forward(self, x, mask=None):

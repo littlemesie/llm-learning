@@ -10,18 +10,18 @@ from layers.attention_layer import AttentionLayer
 from layers.norm_layer import NormLayer
 
 class TransformerBlock(nn.Module):
-    def __init__(self, embed_dim, hidden_dim, num_heads, layer_norm_eps, dropout=0.0):
+    def __init__(self, config):
         super(TransformerBlock, self).__init__()
-        self.attention = AttentionLayer(embed_dim, hidden_dim, num_heads, dropout)
+        self.attention = AttentionLayer(config)
 
         self.ffw = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim * 4),
+            nn.Linear(config.hidden_size, config.hidden_size * 4),
             nn.ReLU(),
-            nn.Linear(hidden_dim * 4, hidden_dim)
+            nn.Linear(config.hidden_size * 4, config.hidden_size)
         )
-        self.norm1 = NormLayer(hidden_dim, layer_norm_eps)
-        self.norm2 = NormLayer(hidden_dim, layer_norm_eps)
-        self.dropout = nn.Dropout(dropout)
+        self.norm1 = NormLayer(config)
+        self.norm2 = NormLayer(config)
+        self.dropout = nn.Dropout(config.hidden_dropout)
 
     def forward(self, x):
         '''
@@ -31,7 +31,6 @@ class TransformerBlock(nn.Module):
         att_out, _ = self.attention(x)
         att_out = self.dropout(att_out)
         add_norm_out = self.norm1(x + att_out)
-
         ############### FFW + Add + Norm ###############
         ffw_out = self.ffw(add_norm_out)
         ffw_out = self.dropout(ffw_out)
@@ -44,18 +43,18 @@ class ExampleConfig():
     def __init__(self):
         self.num_heads = 4
         self.layer_norm_eps = 1e-5
-        self.resid_pdrop = 0.1
-        self.attention_dropout = 0.1
-        self.hidden_dim = 12
+        self.hidden_size = 12
+        self.dropout = 0.1
         self.hidden_dropout = 0.1
 
 
 def layernorm_sample():
     torch.manual_seed(999)
     x = torch.rand((3, 4, 6))
-    normalized_shape = [4, 6]
-    norm1 = NormLayer(normalized_shape)
-    norm2 = NormLayer(normalized_shape)
+    config = ExampleConfig()
+    config.normalized_shape = [4, 6]
+    norm1 = NormLayer(config)
+    norm2 = NormLayer(config)
     print(norm1(x))
     print(norm2(x))
 
@@ -63,8 +62,9 @@ def layernorm_sample():
 def t_TransformerBlock():
     torch.manual_seed(999)
     config = ExampleConfig()
-    trans = TransformerBlock(config.hidden_dim, config.hidden_dim, config.num_heads, config.layer_norm_eps, config.hidden_dropout)
-    q = torch.rand((3, 4, config.hidden_dim))
+    config.normalized_shape = config.hidden_size
+    trans = TransformerBlock(config)
+    q = torch.rand((3, 4, config.hidden_size))
     r = trans(q)
     print(q)
     print(r)

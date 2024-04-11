@@ -8,14 +8,15 @@ import torch
 import torch.nn as nn
 
 class NormLayer(nn.Module):
-    def __init__(self, normalized_shape, eps=1e-5):
+    def __init__(self, config):
         super(NormLayer, self).__init__()
-        if isinstance(normalized_shape, int):
-            normalized_shape = (normalized_shape,)
-
-        self.normalized_shape, self.eps = normalized_shape, eps
-        self.weight = torch.nn.Parameter(torch.ones(normalized_shape))
-        self.bias = torch.nn.Parameter(torch.zeros(normalized_shape))
+        self.config = config
+        self.eps = config.layer_norm_eps
+        self.normalized_shape = config.normalized_shape
+        if isinstance(self.normalized_shape, int):
+            self.normalized_shape = (self.normalized_shape,)
+        self.weight = torch.nn.Parameter(torch.ones(self.normalized_shape))
+        self.bias = torch.nn.Parameter(torch.zeros(self.normalized_shape))
 
     def _mean(self, x):
         _shape = list(x.shape[:-len(self.normalized_shape)]) + [-1]
