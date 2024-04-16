@@ -4,8 +4,11 @@
 @date: 2024/3/27 下午6:54
 @summary: bert
 """
+import os
 import torch
+import logging
 from torch import nn
+from copy import deepcopy
 from torch.nn.init import normal_
 from utils.activation_util import get_activation
 
@@ -15,11 +18,11 @@ class BertEmbedding(nn.Module):
     """
 
     def __init__(self, config):
-        super(BertEmbedding).__init__()
+        super().__init__()
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-        self.layer_norm = nn.LayerNorm(config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.register_buffer("position_ids",
                              torch.arange(config.max_position_embeddings).expand((1, -1)))
@@ -33,7 +36,7 @@ class BertEmbedding(nn.Module):
     def forward(self, input_ids=None, position_ids=None, token_type_ids=None):
         """
         :param input_ids:  输入序列的原始token id, shape: [src_len, batch_size]
-        :param position_ids: 位置序列，本质就是 [0,1,2,3,...,src_len-1], shape: [src_len,batch_size]
+        :param position_ids: 位置序列，本质就是 [0,1,2,3,...,src_len-1], shape: [1,src_len]
         :param token_type_ids: 句子分隔token, 例如[0,0,0,0,1,1,1,1]用于区分两个句子 shape:[src_len,batch_size]
         :return: [src_len, batch_size, hidden_size]
         """
@@ -41,7 +44,8 @@ class BertEmbedding(nn.Module):
         # shape:[src_len,batch_size,hidden_size]
 
         if position_ids is None:  # 在实际建模时这个参数其实可以不用传值
-            position_ids = torch.arange(input_ids.shape[1], dtype=torch.long)
+            position_ids = torch.arange(input_ids.shape[0], dtype=torch.long).unsqueeze(0)
+
         positional_embedding = self.position_embeddings(position_ids).transpose(0, 1)
         # [src_len, 1, hidden_size]
 
@@ -76,7 +80,7 @@ class BertAttentionOutput(nn.Module):
 
 class BertAttention(nn.Module):
     def __init__(self, config):
-        super(BertAttention).__init__()
+        super().__init__()
         self.multi_head_attention = nn.MultiheadAttention(embed_dim=config.hidden_size,
                                                           num_heads=config.num_attention_heads,
                                                           dropout=config.attention_probs_dropout_prob)
@@ -216,9 +220,49 @@ class BertPooler(nn.Module):
         pooled_output = self.activation(pooled_output)
         return pooled_output  # [batch_size, hidden_size]
 
+def format_paras_for_torch(loaded_paras_names, loaded_paras):
+    """
+    该函数的作用是将预训练参数格式化成符合torch(1.5.0)框架中MultiHeadAttention的参数形式
+    :param loaded_paras_names:
+    :param loaded_paras:
+    :return:
+    """
+    qkv_weight_names = ['query.weight', 'key.weight', 'value.weight']
+    qkv_bias_names = ['query.bias', 'key.bias', 'value.bias']
+    qkv_weight, qkv_bias = [], []
+    torch_paras = []
+    for i in range(len(loaded_paras_names)):
+        para_name_in_pretrained = loaded_paras_names[i]
+        para_name = ".".join(para_name_in_pretrained.split('.')[-2:])
+        if para_name in qkv_weight_names:
+            qkv_weight.append(loaded_paras[para_name_in_pretrained])
+        elif para_name in qkv_bias_names:
+            qkv_bias.append(loaded_paras[para_name_in_pretrained])
+        else:
+            torch_paras.append(loaded_paras[para_name_in_pretrained])
+        if len(qkv_weight) == 3:
+            torch_paras.append(torch.cat(qkv_weight, dim=0))
+            qkv_weight = []
+        if len(qkv_bias) == 3:
+            torch_paras.append(torch.cat(qkv_bias, dim=0))
+            qkv_bias = []
+    return torch_paras
+
+def replace_512_position(init_embedding, loaded_embedding):
+    """
+    本函数的作用是当max_positional_embedding > 512时，用预训练模型中的512个向量来
+    替换随机初始化的positional embedding中的前512个向量
+    :param init_embedding:  初始化的positional embedding矩阵，大于512行
+    :param loaded_embedding: 预训练模型中的positional embedding矩阵，等于512行
+    :return: 前512行被替换后的初始化的positional embedding矩阵
+    """
+    logging.info(f"模型参数max_positional_embedding > 512，采用替换处理！")
+    init_embedding[:512, :] = loaded_embedding[:512, :]
+    return init_embedding
+
 class BertModel(nn.Module):
     def __init__(self, config):
-        super(BertModel, self).__init__()
+        super().__init__()
         self.config = config
         self.bert_embeddings = BertEmbedding(config)
         self.bert_encoder = BertEncoder(config)
@@ -259,3 +303,30 @@ class BertModel(nn.Module):
         # 默认是最后一层的first token 即[cls]位置经dense + tanh 后的结果
         # pooled_output: [batch_size, hidden_size]
         return pooled_output, all_encoder_outputs
+
+    @classmethod
+    def from_pretrained(cls, config, pretrained_model_dir=None):
+
+        model = cls(config)  # 初始化模型，cls为未实例化的对象，即一个未实例化的BertModel对象
+        pretrained_model_path = os.path.join(pretrained_model_dir, "pytorch_model.bin")
+        if not os.path.exists(pretrained_model_path):
+            raise ValueError(f"<路径：{pretrained_model_path} 中的模型不存在，请仔细检查！>\n"
+                             f"中文模型下载地址：https://huggingface.co/bert-base-chinese/tree/main\n"
+                             f"英文模型下载地址：https://huggingface.co/bert-base-uncased/tree/main\n")
+        loaded_paras = torch.load(pretrained_model_path)
+        state_dict = deepcopy(model.state_dict())
+        loaded_paras_names = list(loaded_paras.keys())[:-8]
+        model_paras_names = list(state_dict.keys())[1:]
+        torch_paras = format_paras_for_torch(loaded_paras_names, loaded_paras)
+        for i in range(len(model_paras_names)):
+            logging.debug(f"## 成功赋值参数:{model_paras_names[i]},形状为: {torch_paras[i].size()}")
+            if "position_embeddings" in model_paras_names[i]:
+                # 这部分代码用来消除预训练模型只能输入小于512个字符的限制
+                if config.max_position_embeddings > 512:
+                    new_embedding = replace_512_position(state_dict[model_paras_names[i]],
+                                                         loaded_paras[loaded_paras_names[i]])
+                    state_dict[model_paras_names[i]] = new_embedding
+                    continue
+            state_dict[model_paras_names[i]] = torch_paras[i]
+        model.load_state_dict(state_dict)
+        return model
