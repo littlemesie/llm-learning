@@ -37,7 +37,7 @@ def make_data():
 if __name__ == '__main__':
     config = ModelConfig()
     input_ids, masked_lm_labels = make_data()
-    print(input_ids.shape)
+
     model = BertForMaskedLM(config)
     output = model(input_ids=input_ids,
                    masked_lm_labels=None)
