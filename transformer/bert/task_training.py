@@ -8,7 +8,7 @@ import logging
 import torch
 import torch.nn as nn
 from utils.activation_util import get_activation
-from transformers.bert.model import BertModel
+from transformer.bert.model import BertModel
 
 class BertForLMTransformHead(nn.Module):
     """

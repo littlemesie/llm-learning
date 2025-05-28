@@ -4,7 +4,7 @@
 @date: 2024/3/26 下午7:52
 @summary:
 """
-from tokenizers.bert_tokenizer import BertTokenizer
+from tokenizer.bert_tokenizer import BertTokenizer
 
 def sample_BertTokenizer():
     text = "“五一”小长假临近，30岁的武汉市民万昕在文旅博览会上获得了一些制定5天旅游计划的新思路。“‘壮美广西’‘安逸四川’，还有‘有一种叫云南的生活’这些展馆标识都很新颖，令人心向往之。”万昕说，感到身边越来越多的人走出家门去旅游。"

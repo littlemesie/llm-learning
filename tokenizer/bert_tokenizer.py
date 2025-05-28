@@ -7,7 +7,7 @@
 import torch
 import unicodedata
 from collections import OrderedDict
-from tokenizers.bpe_tokenizer import WordPieceTokenizer
+from tokenizer.bpe_tokenizer import WordPieceTokenizer
 
 class BasicTokenizer(object):
     """
@@ -47,7 +47,7 @@ class BasicTokenizer(object):
         Examples:
             .. code-block::
 
-                from paddlenlp.transformers import BasicTokenizer
+                from paddlenlp.transformer import BasicTokenizer
                 basictokenizer = BasicTokenizer()
                 tokens = basictokenizer.tokenize('He was a puppeteer')
                 '''
@@ -207,7 +207,7 @@ class WordpieceTokenizer(object):
         Examples:
             .. code-block::
 
-                from paddlenlp.transformers import BertTokenizer, WordpieceTokenizer
+                from paddlenlp.transformer import BertTokenizer, WordpieceTokenizer
 
                 berttokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
                 vocab  = berttokenizer.vocab

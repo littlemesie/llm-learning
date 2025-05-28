@@ -8,8 +8,8 @@ import torch
 import logging
 from core.system_config import project_dir
 from core.log import configure_logging
-from transformers.bert.config import BertConfig
-from transformers.bert.task_training import BertForMaskedLM
+from transformer.bert.config import BertConfig
+from transformer.bert.task_training import BertForMaskedLM
 
 class ModelConfig(object):
     def __init__(self):
